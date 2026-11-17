@@ -101,8 +101,8 @@ function vecminus(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
 function normal(a,b,c){var u=vecminus(b,a),v=vecminus(c,a);var n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];var l=Math.hypot(n[0],n[1],n[2])||1;return n.map(function(q){return q/l;});}
 function Batch(){this.values=[];this.triangles=0;}
 Batch.prototype.tri=function(a,b,c,co){
-var n=normal(a,b,c),v=this.values;
-[a,b,c].forEach(function(p){v.push(p[0],p[1],p[2],n[0],n[1],n[2],co[0],co[1],co[2]);});
+var n=normal(a,b,c),v=this.values,isGrass=this===grass;
+[a,b,c].forEach(function(p){var ny=isGrass?clamp((p[1]-terrain(p[0],p[2]))*2,0,1):n[1];v.push(p[0],p[1],p[2],n[0],ny,n[2],co[0],co[1],co[2]);});
 this.triangles++;
 };
 Batch.prototype.quad=function(a,b,c,d,co){this.tri(a,b,c,co);this.tri(a,c,d,co);};
