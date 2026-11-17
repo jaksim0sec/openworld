@@ -31,8 +31,8 @@
 - [ ] Confirm target vista and design proposal with user.
 
 ### Task 2: Environment spike
-- [ ] Write an independently runnable landscape scene, covering sky, terrain, organic foliage, cliffs, and atmosphere.
-- [ ] Run syntax checks and browser checks. Record exact environment limitations.
+- [x] Write a standalone WebGL2 landscape study (`index.html`) with sky, terrain, water, procedural trees, cliffs, and grass. Visual quality is NOT yet accepted.
+- [x] Static syntax and DOM/shader declaration checks passed in GitHub Actions. Automated browser could not obtain a WebGL2 context; this is not a render pass.
 - [ ] Compare actual render to art reference and adjust shapes/materials until the visual differences are acceptable.
 
 ### Task 3: Mobile gate
