@@ -1,4 +1,4 @@
-/* Serenvelt environment art study 04. Standalone WebGL2, no runtime dependencies. */
+/* Serenvelt environment art study 05 · restored warm/cool landscape palette. Standalone WebGL2. */
 (()=>{'use strict';
 const canvas=document.querySelector('#world'),err=document.querySelector('#error'),status=document.querySelector('#stats');
 const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:true,powerPreference:'high-performance'});
@@ -259,9 +259,9 @@ vec3 skyAtmosphere(vec3 d){
  float optical=1./(.14+y*1.9);
  vec3 rayBeta=vec3(.24,.43,.9);
  vec3 scatter=(1.-exp(-rayBeta*optical*.88))*rayPhase;
- vec3 base=mix(vec3(.57,.81,.87),vec3(.065,.51,.77),pow(y,.51));
+ vec3 base=mix(vec3(.59,.83,.85),vec3(.065,.54,.77),pow(y,.51));
  base+=scatter*vec3(.034,.067,.115);
- base+=vec3(1.,.71,.35)*exp(-y*11.)*(.08+.15*uWarm)*.35;
+ base+=vec3(1.,.70,.40)*exp(-y*9.)*(.08+.15*uWarm)*.55;
  base+=miePhase*vec3(1.,.77,.48)*(.004+.008*uWarm)*exp(-y*.5);
  return base;
 }
@@ -322,17 +322,20 @@ void main(){
    float stipple=texture(uNoise,p*.195+vec2(.02,.68)).r;
    float wave=.5+.5*sin(p.x*.037+p.y*.025+broad*3.);
    float soil=smoothstep(.19,.78,broad*.50+medium*.29+wave*.21);
-   vec3 dark=vec3(.21,.40,.23),mid=vec3(.36,.58,.31),bright=vec3(.61,.74,.37);
+   vec3 dark=vec3(.18,.40,.22),mid=vec3(.42,.66,.30),bright=vec3(.75,.84,.35);
    vec3 meadow=mix(dark,mid,smoothstep(.12,.92,soil));
    meadow=mix(meadow,bright,.30*medium+.14*wave);
+   meadow+=vec3(.085,.09,.010)*smoothstep(.46,.72,.58*medium+.42*wave)*sun;
    meadow+=vec3(.048,.055,.014)*(fine-.5)+vec3(.019,.022,.007)*(stipple-.5);
-   meadow*=.70+.31*sun;
-   meadow+=vec3(.095,.065,.018)*sun*uWarm;
+   meadow*=.77+.34*sun;
+   vec3 ambientSky=vec3(.045,.085,.075);
+   meadow+=ambientSky*(1.-sun)*.26;
+   meadow+=vec3(.145,.113,.025)*sun*uWarm;
    // Material diversity follows exposure, silt deposition and foot traffic, not arbitrary green tint.
    float coarse=noise(p*.037+vec2(8.7,1.2));
    float exposure=smoothstep(.19,.40,1.-N.y);
-   float loam=smoothstep(.32,.60,.70*(1.-medium)+.30*coarse)*.33;
-   loam=clamp(loam*.3+smoothstep(.53,.70,.58*(1.-medium)+.42*(1.-broad))*.60+exposure*.2,0.,.7);
+   float loam=smoothstep(.68,.82,.58*(1.-medium)+.42*(1.-broad))*.13;
+   loam=clamp(loam+exposure*.12,0.,.19);
    vec3 earth=mix(vec3(.39,.34,.25),vec3(.64,.57,.43),broad*.48+fine*.52);
    meadow=mix(meadow,earth,loam);
    c=mix(c,meadow,.95);
@@ -350,12 +353,12 @@ void main(){
    c=mix(c,silt,shore*(1.-stone)*.85);
    // A quiet walking trail guides the landscape toward the old tree.
    float track=8.+p.y*.14+5.*sin(p.y*.03)+(noise(p*.05)-.5)*2.;
-   float trail=(1.-smoothstep(.65,1.92,abs(p.x-track)))*smoothstep(-52.,-24.,p.y)*(1.-smoothstep(72.,91.,p.y));
-   c=mix(c,vec3(.58,.50,.37)+vec3(.045,.038,.02)*(fine-.5),trail*(1.-stone)*.92);
+   float trail=(1.-smoothstep(.48,1.35,abs(p.x-track)))*smoothstep(-52.,-24.,p.y)*(1.-smoothstep(72.,91.,p.y));
+   c=mix(c,vec3(.67,.63,.48)+vec3(.045,.038,.02)*(fine-.5),trail*(1.-stone)*.68);
    vec2 shadowPos=(p-vec2(32.5,57.));
    float shadow=.32*exp(-2.0*(shadowPos.x*shadowPos.x/(18.*18.)+shadowPos.y*shadowPos.y/(12.*12.)));
    float nearShade=1.-smoothstep(8.,43.,length(p-vec2(0.,-23.)));
-   c*=1.-shadow-.11*nearShade;
+   c*=1.-shadow-.07*nearShade;
  }else if(uKind>.5&&uKind<1.5){
    float q=sin(vWorld.z*.53-vWorld.x*.17+uTime*.8)*sin(vWorld.x*.96+vWorld.z*.08-uTime*.71);
    float q2=noise(vWorld.xz*.48+vec2(uTime*.035,uTime*.02));
@@ -379,8 +382,8 @@ void main(){
    if(uKind>2.5){float fade=1.-smoothstep(32.,58.,vDistance);float d=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);if(d>fade)discard;}
    c+=vec3(.08,.065,.021)*sun;
  }
- float haze=1.-exp(-pow(vDistance*(.0017+uHaze*.0088),1.22));
- vec3 horizon=vec3(.54,.75,.77)+vec3(.08,.045,.005)*uWarm;
+ float haze=1.-exp(-pow(vDistance*(.0013+uHaze*.0067),1.22));
+ vec3 horizon=mix(vec3(.56,.78,.80),vec3(.77,.86,.78),clamp(.28+.40*uWarm,0.,1.));
  c=mix(c,horizon,clamp(haze,0.,.86));
  frag=vec4(clamp(c,0.,1.),1.);
 }`;
@@ -400,8 +403,8 @@ void main(){
  uint seed=id*167u+card*2654435761u;
  float a=rnd(id*43u)*6.2831853+float(card)*1.5707963;
  vec2 axis=vec2(cos(a),sin(a));
- float width=mix(.39,.62,rnd(id*11u))*aRoot.w;
- float height=mix(.32,.58,rnd(id*17u))*aRoot.w;
+ float width=mix(.45,.72,rnd(id*11u))*aRoot.w;
+ float height=mix(.39,.73,rnd(id*17u))*aRoot.w;
  float gust=sin(uTime*.77+aRoot.x*.12+aRoot.z*.08)*.64+sin(uTime*1.8+aRoot.x*.31-aRoot.z*.18)*.36;
  vec2 wind=vec2(.075,.053)*gust*uv.y*uv.y;
  vec3 world=aRoot.xyz+vec3(axis.x*(uv.x-.5)*width+wind.x,height*uv.y,axis.y*(uv.x-.5)*width+wind.y);
@@ -420,10 +423,10 @@ in vec2 vUv;in vec3 vTint;in float vY,vDistance;out vec4 frag;
 uniform float uWarm,uHaze;uniform sampler2D uGrassTex;
 void main(){
  vec4 blade=texture(uGrassTex,vUv);if(blade.a<.39)discard;
- vec3 col=blade.rgb*vTint*(.76+.25*vY);
- col+=vec3(.085,.065,.007)*vY*uWarm;
- float fog=1.-exp(-pow(vDistance*(.0017+uHaze*.0088),1.22));
- col=mix(col,vec3(.54,.75,.77)+vec3(.08,.045,.005)*uWarm,clamp(fog,0.,.79));
+ vec3 col=blade.rgb*vTint*(.98+.22*vY);
+ col+=vec3(.14,.13,.02)*vY*uWarm;
+ float fog=1.-exp(-pow(vDistance*(.0013+uHaze*.0067),1.22));
+ col=mix(col,mix(vec3(.56,.78,.80),vec3(.77,.86,.78),.28+.40*uWarm),clamp(fog,0.,.79));
  float fade=1.-smoothstep(40.,62.,vDistance);
  float jitter=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
  if(jitter>fade)discard;
