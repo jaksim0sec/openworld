@@ -12,3 +12,5 @@ jobs:
           node-version: '22'
       - run: node tools/verify.mjs
       - run: node tools/color.test.mjs
+      - run: node --check movement.js
+      - run: node --test tests/movement.test.cjs
