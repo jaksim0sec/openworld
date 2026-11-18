@@ -467,7 +467,13 @@ try{sky=link(skyVS,skyFS);world=link(worldVS,worldFS);harborProgram=link(worldVS
 catch(e){console.error(e);err.textContent='시각화 초기화 실패\n'+e.message;err.classList.add('show');return;}
 const views={harbor:{x:-5.5,z:-22,y:ground(-5.5,-22)+1.7,yaw:.12,pitch:-.035},meadow:{x:0,z:-23,y:ground(0,-23)+1.72,yaw:innerWidth<600?.27:.12,pitch:-.05},grove:{x:19,z:58,y:ground(19,58)+1.72,yaw:.54,pitch:.01},cliff:{x:-90,z:47,y:ground(-90,47)+6,yaw:.12,pitch:.09}};
 let cam={...views.harbor},quality=window.innerWidth<600?1:0;const buttons=[...document.querySelectorAll('[data-vista]')],qualityNames=['화질 · 높음','화질 · 보통','화질 · 절전'];
-const motion=window.SerenveltMotion.createControls({canvas,ground,cam,region:harbor.getCollision(ground)});
+const harborRegion=harbor.getCollision(ground);
+const town=window.SerenveltTown.createSimulation({region:harborRegion,initialHour:8.2});
+const townVisual=window.SerenveltCitizens.createRenderer(gl,town);
+const actorAdapter={getActors:()=>town.getActors(),nearest:(state,region)=>window.SerenveltTown.nearestResident(town,state,region),talk:(id)=>town.talk(id)};
+const motion=window.SerenveltMotion.createControls({canvas,ground,cam,region:harborRegion,actors:actorAdapter});
+const townClock=document.querySelector('#town-clock');
+window.__SERENVELT_TOWN__={snapshot:()=>town.snapshot(),advance:(seconds)=>{for(let i=0;i<seconds;i+=5)town.tick(Math.min(5,seconds-i));},talk:(id)=>town.talk(id)};
 window.__SERENVELT_DEBUG__={teleport:location=>motion.teleport(location),getState:()=>motion.getState()};
 const qb=document.querySelector('[data-vista=quality]');qb.textContent=qualityNames[quality];
 buttons.forEach(btn=>btn.addEventListener('click',()=>{let kind=btn.dataset.vista;if(kind==='quality'){quality=(quality+1)%3;qb.textContent=qualityNames[quality];return;}motion.teleport(views[kind]);buttons.forEach(x=>{if(x!==qb)x.classList.toggle('active',x===btn);});}));
@@ -487,7 +493,9 @@ function uniform(p,t){gl.useProgram(p);let cp=Math.cos(cam.pitch),sp=Math.sin(ca
  let u=loc(p,'uSize');if(u!==null)gl.uniform2f(u,w,hh);
 }
 let empty=gl.createVertexArray(),previousMovement=performance.now();function render(now){
- motion.update(Math.min(.05,Math.max(0,(now-previousMovement)/1000)));previousMovement=now;
+ const delta=Math.min(.05,Math.max(0,(now-previousMovement)/1000));
+ town.tick(Math.min(.25,Math.max(0,(now-previousMovement)/1000)));motion.update(delta);previousMovement=now;
+ if(townClock){const time=town.getClock(),hh24=Math.floor(time),mm=Math.floor((time-hh24)*60);townClock.textContent='카엘 '+String(hh24).padStart(2,'0')+':'+String(mm).padStart(2,'0')+' · '+(town.snapshot().marketSupply==='low'?'입항 지연':town.snapshot().marketSupply==='restocked'?'물품 입고':'상점 마감');}
  let q=Math.min(devicePixelRatio||1,1.6)*[1,.7,.5][quality],width=Math.max(2,Math.round(canvas.clientWidth*q)),height=Math.max(2,Math.round(canvas.clientHeight*q));
  if(w!==width||hh!==height){w=canvas.width=width;hh=canvas.height=height;gl.viewport(0,0,w,hh);}
  gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,noiseTex);
@@ -501,6 +509,8 @@ let empty=gl.createVertexArray(),previousMovement=performance.now();function ren
  uniform(harborProgram,now*.001);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,harborTex);
  let hs=loc(harborProgram,'uAtlas');if(hs!==null)gl.uniform1i(hs,0);
  gl.bindVertexArray(harborMesh.vao);gl.drawArrays(gl.TRIANGLES,0,harborMesh.count);
+ // One instanced draw for all six residents; schedule and animation are independent of the player.
+ townVisual.draw(cam,w,hh);
  // Study 01 grass gets its own V1 instanced draw, sharing the same eye and atmosphere.
  uniform(grassProgram,now*.001);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,grassTex);
  let grassSampler=loc(grassProgram,'uGrassTex');if(grassSampler!==null)gl.uniform1i(grassSampler,0);
@@ -508,9 +518,9 @@ let empty=gl.createVertexArray(),previousMovement=performance.now();function ren
  let drawnGrass=Math.floor(grassField.count*[1,.70,.42][quality]);
  gl.drawArraysInstanced(gl.TRIANGLES,0,12,drawnGrass);
  frame++;ms+=Math.max(0,now-prev);prev=now;
- if(ms>1000){let fps=Math.round(frame*1000/ms),tris=[terrain,opaque,water,canopy,leaves,harborMesh].reduce((sum,x)=>sum+x.tris,0)+drawnGrass*4;
+ if(ms>1000){let fps=Math.round(frame*1000/ms),tris=[terrain,opaque,water,canopy,leaves,harborMesh].reduce((sum,x)=>sum+x.tris,0)+drawnGrass*4+townVisual.triangles;
   status.textContent=fps+' FPS · '+Math.round(tris/1000)+'K TRI · '+w+'×'+hh;
-  window.__SERENVELT_DIAGNOSTICS__={fps,triangles:tris,drawCalls:8,width:w,height:hh,quality,glError:gl.getError()};frame=0;ms=0;
+  window.__SERENVELT_DIAGNOSTICS__={fps,triangles:tris,drawCalls:8+townVisual.drawCalls,width:w,height:hh,quality,glError:gl.getError()};frame=0;ms=0;
  }
  requestAnimationFrame(render);
 }

@@ -15,3 +15,5 @@ jobs:
       - run: node --check movement.js
       - run: node --test tests/*.cjs
       - run: node --check harbor.js
+      - run: node --check town.js
+      - run: node --check town_render.js

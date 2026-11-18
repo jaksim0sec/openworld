@@ -60,7 +60,7 @@ function advancePlayer(state,input={},delta=1/60,sampleGround=()=>0,obstacles=[]
  return state;
 }
 
-function createControls({canvas,ground,cam,region=null}){
+function createControls({canvas,ground,cam,region=null,actors=null}){
  const pad=document.querySelector('#move-pad'),thumb=document.querySelector('#move-thumb');
  const jump=document.querySelector('#jump'),interact=document.querySelector('#interact');
  const hint=document.querySelector('#context-hint'),toast=document.querySelector('#toast');
@@ -107,7 +107,11 @@ function createControls({canvas,ground,cam,region=null}){
   const dx=tree.x-state.x,dz=tree.z-state.z,dist=Math.hypot(dx,dz);
   return dist<5.2&&(Math.sin(state.yaw)*dx+Math.cos(state.yaw)*dz)/Math.max(dist,.001)>.0;
  }
- function inspect(){const near=region?.interactions?.find(p=>Math.hypot(p.x-state.x,p.z-state.z)<3.7);
+ function inspect(){const npc=actors?.nearest(state,region);if(npc){
+  if(toast){toast.textContent=actors.talk(npc.def.id);toast.classList.add('visible');toastUntil=performance.now()+4800;}
+  return true;
+ }
+ const near=region?.interactions?.find(p=>Math.hypot(p.x-state.x,p.z-state.z)<3.7);
   if(!canInspect()&&!near)return false;
   if(toast){toast.textContent=near?near.description:'오래된 나무. 줄기에는 희미한 바람의 흔적이 남아 있다.';toast.classList.add('visible');toastUntil=performance.now()+3600;}
   return true;
@@ -116,7 +120,8 @@ function createControls({canvas,ground,cam,region=null}){
  function update(delta){
   const f=clamp((keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0)+stick.forward,-1,1);
   const s=clamp((keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+stick.strafe,-1,1);
-  advancePlayer(state,{forward:f,strafe:s,sprint:keys.has('ShiftLeft')||keys.has('ShiftRight'),jump:jumpPulse.consume()},delta,floor,colliders);
+  const movingResidents=actors?.getActors().map(a=>({x:a.x,z:a.z,radius:.28}))||[];
+  advancePlayer(state,{forward:f,strafe:s,sprint:keys.has('ShiftLeft')||keys.has('ShiftRight'),jump:jumpPulse.consume()},delta,floor,[...colliders,...movingResidents]);
   const moving=Math.min(1,Math.hypot(state.vx,state.vz)/4.9);
   elapsed+=Math.max(0,Math.min(.05,delta));bob+=(moving-bob)*(1-Math.exp(-8*Math.max(delta,0)));
   const targetRoll=-.028*s*moving;roll+=(targetRoll-roll)*(1-Math.exp(-12*Math.max(delta,0)));
@@ -124,9 +129,10 @@ function createControls({canvas,ground,cam,region=null}){
   cam.y=state.y+EYE_HEIGHT+(state.onGround?Math.sin(state.distanceWalked*11.2)*.032*bob:0);
   cam.yaw=state.yaw;cam.pitch=state.pitch;cam.roll=roll;
   const nearRegion=region?.interactions?.find(p=>Math.hypot(p.x-state.x,p.z-state.z)<3.7);
-  const visible=canInspect()||!!nearRegion;if(interact)interact.hidden=!visible;if(hint){hint.hidden=!visible;if(visible)hint.textContent=nearRegion?nearRegion.label+' · E / 조사':'고목 · E / 조사';}
+  const npc=actors?.nearest(state,region);
+  const visible=!!npc||canInspect()||!!nearRegion;if(interact)interact.hidden=!visible;if(hint){hint.hidden=!visible;if(visible)hint.textContent=npc?npc.def.name+' · '+npc.def.job+' · 대화':nearRegion?nearRegion.label+' · E / 조사':'고목 · E / 조사';}
   if(toast&&toastUntil&&performance.now()>toastUntil){toast.classList.remove('visible');toastUntil=0;}
-  window.__SERENVELT_PLAYER__={region:region?'harbor':'meadow',x:state.x,y:state.y,z:state.z,yaw:state.yaw,onGround:state.onGround,inspectable:visible};
+  window.__SERENVELT_PLAYER__={region:region?'harbor':'meadow',x:state.x,y:state.y,z:state.z,yaw:state.yaw,onGround:state.onGround,inspectable:visible,npc:npc?.def.id||null};
  }
  function teleport(view){state=createPlayerState(view,floor);cam.x=state.x;cam.z=state.z;cam.y=state.y+EYE_HEIGHT;cam.yaw=state.yaw;cam.pitch=state.pitch;cam.roll=0;}
  return {update,teleport,inspect,getState:()=>({...state})};
