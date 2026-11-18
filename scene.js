@@ -321,7 +321,7 @@ function link(v,f){let p=gl.createProgram();gl.attachShader(p,shader(gl.VERTEX_S
 let sky,world,leafTex,grassTex;
 try{sky=link(skyVS,skyFS);world=link(worldVS,worldFS);makeTerrain();scatter();[terrain,opaque,water,canopy,leaves,grass].forEach(x=>x.upload());leafTex=drawAtlas('leaves');grassTex=drawAtlas('grass');}
 catch(e){console.error(e);err.textContent='시각화 초기화 실패\n'+e.message;err.classList.add('show');return;}
-const views={meadow:{x:0,z:-23,y:ground(0,-23)+4.2,yaw:.12,pitch:-.05},grove:{x:19,z:30,y:ground(19,30)+4.4,yaw:.18,pitch:.01},cliff:{x:-90,z:47,y:ground(-90,47)+6,yaw:.12,pitch:.09}};
+const views={meadow:{x:0,z:-23,y:ground(0,-23)+4.2,yaw:innerWidth<600?.27:.12,pitch:-.05},grove:{x:19,z:30,y:ground(19,30)+4.4,yaw:.18,pitch:.01},cliff:{x:-90,z:47,y:ground(-90,47)+6,yaw:.12,pitch:.09}};
 let cam={...views.meadow},quality=window.innerWidth<600?1:0;const buttons=[...document.querySelectorAll('[data-vista]')],qualityNames=['화질 · 높음','화질 · 보통','화질 · 절전'];
 const qb=document.querySelector('[data-vista=quality]');qb.textContent=qualityNames[quality];
 buttons.forEach(btn=>btn.addEventListener('click',()=>{let kind=btn.dataset.vista;if(kind==='quality'){quality=(quality+1)%3;qb.textContent=qualityNames[quality];return;}cam={...views[kind]};buttons.forEach(x=>{if(x!==qb)x.classList.toggle('active',x===btn);});}));
