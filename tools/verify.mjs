@@ -3,23 +3,19 @@ import { Script } from 'node:vm';
 import assert from 'node:assert/strict';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const js = html.match(/<script>([\s\S]*?)<\/script>/);
-assert.ok(js, 'Executable JavaScript script is present');
-new Script(js[1], { filename: 'index-inline.js' });
+const scene = readFileSync(new URL('../scene.js', import.meta.url), 'utf8');
 
-const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
-for (const id of ['world', 'stats', 'err', 'quality', 'sky-vs', 'sky-fs', 'world-vs', 'world-fs']) {
-  assert.ok(ids.has(id), 'Missing DOM ID: ' + id);
+new Script(scene, { filename: 'scene.js' });
+assert.match(html, /<script src="scene\.js"><\/script>/);
+for (const id of ['world', 'stats', 'error']) {
+  assert.match(html, new RegExp('id="' + id + '"'), 'Missing DOM ID: ' + id);
 }
-for (const match of js[1].matchAll(/getElementById\('([^']+)'\)/g)) {
-  assert.ok(ids.has(match[1]), 'Unresolved DOM ID: ' + match[1]);
+for (const vista of ['meadow', 'grove', 'cliff', 'quality']) {
+  assert.match(html, new RegExp('data-vista="' + vista + '"'), 'Missing vista button: ' + vista);
 }
-for (const shaderId of ['sky-vs', 'sky-fs', 'world-vs', 'world-fs']) {
-  const shaderTag = html.match(new RegExp('<script[^>]*id="' + shaderId + '"[^>]*>([\\s\\S]*?)<\\/script>'));
-  assert.ok(shaderTag && shaderTag[1].startsWith('#version 300 es'), 'Missing GLSL ES 3 shader: ' + shaderId);
+for (const segment of ["getContext('webgl2'", 'function ridge(', 'function ground(', 'function bigTree(', 'function crownSurface(', 'function drawAtlas(', 'const skyFS=', 'const worldFS=', 'requestAnimationFrame(render)', '__SERENVELT_DIAGNOSTICS__']) {
+  assert.ok(scene.includes(segment), 'Missing required rendering code: ' + segment);
 }
-assert.match(js[1], /getContext\('webgl2'/);
-assert.match(js[1], /requestAnimationFrame\(draw\)/);
-assert.match(js[1], /pointermove/);
-console.log('PASS: Inline JavaScript syntax, DOM references, GLSL declarations, and render loop');
-console.log('NOTE: GPU compilation, visual appearance, FPS and mobile hardware remain untested');
+assert.equal((scene.match(/#version 300 es/g) || []).length >= 4, true, 'Missing shader declarations');
+console.log('PASS: Node JavaScript syntax, launcher controls, shader declarations, and render loop.');
+console.log('NOTE: This check does NOT verify GPU shader compilation, rendered appearance, mobile GPU frame rate or texture quality.');
