@@ -4,7 +4,7 @@
 
 ## 개발 현황
 
-**2026-11-18 현재 main: WebGL2 환경 스터디 03**. [시연](index.html) · [정적 검증](.github/workflows/verify.yml). 배포 가능한 RPG 게임 엔진이나 사회·전투 시스템은 아직 없다. 이동·1인칭 카메라·충돌의 별도 로컬 프로토타입은 존재하지만 **main에 통합되지 않았다**. 사용자 제공 지형·하늘·인체 모델과 지역 지도를 참고했다.
+**2026-11-18 현재 main: WebGL2 환경 스터디 05 (초기 하늘·잔디 연구의 색감 복원 작업)**. [시연](index.html) · [정적 검증](.github/workflows/verify.yml). 배포 가능한 RPG 게임 엔진이나 사회·전투 시스템은 아직 없다. 이동·1인칭 카메라·충돌의 별도 로컬 프로토타입은 존재하지만 **main에 통합되지 않았다**. 사용자 제공 지형·하늘·인체 모델과 지역 지도를 참고했다.
 
 - 목표 아트: Painterly Stylized Realism + Anime-Stylized Environment
 - 검증 대상: 대기 원근, 지형 곡면, 수목 실루엣, 잔디, 수면, 모바일 GPU 부하
@@ -26,5 +26,6 @@
 - [세계 설정·NPC·생태·콘텐츠 초안](docs/world/SERENVELT_WORLD_BIBLE_v0.1.md) (제안, 아직 확정 캐논 아님)
 - [최신 단계별 복구·사회형 Vertical Slice 계획](docs/superpowers/plans/2026-11-18-living-world-vertical-slice.md)
 - [환경 스터디 03의 미완성 평가](docs/visual-study-03-review.md)
+- [환경 스터디 05 색감 변경·검증 기록](docs/visual-study-05-color-review.md)
 
 **직후 구현 우선순위:** 이동 프로토타입 안전하게 main 통합 → 실기기/비주얼 게이트 → 카엘 항구 한 구획의 생활감 있는 3D 공간 → NPC 일정과 최소 데이터 구조 → 선택형 생계/모험 루프. 전체 섬·범용 NPC AI를 먼저 확장하지 않는다.
