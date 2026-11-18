@@ -54,3 +54,9 @@
 - [구현 및 검증 기록](docs/kael-harbor-social-v1.md) / [생활형 세계 설정 초안](docs/world/SERENVELT_WORLD_BIBLE_v0.1.md).
 - 테스트: Node 19개 통과, Chromium WebGL2 소프트웨어 렌더 0 오류, 모바일 에뮬레이션 조이스틱/대화 확인.
 - **V1 공통 모델은 최종 아트 에셋이 아니며 실제 Android GPU 성능/메모리는 미검증.** 가격·거래·관계 저장 시스템도 아직 없음.
+
+## NPC 인체 모델 기준 (2026-11-18)
+
+- 주민 6명은 사용자가 제공한 `HumanModelAsset/1`의 **같은 47본 메시와 리깅**을 사용한다. 이전에 직접 생성한 별도 NPC 인체 메시를 더 이상 사용하지 않는다.
+- [원본 기반 LOD 및 검증](docs/model-integration.md) · [파생 모델](assets/human_npc_lod.js). 근거리 19.7K / 원거리 4.1K 삼각형, 기존 일과·대화 유지.
+- **원본에 의상이 없어 현재 복장은 임시 표면 색상**이다. NPC 최종 아트·건물 품질 검수는 미통과, 실기기 성능도 미검증.
