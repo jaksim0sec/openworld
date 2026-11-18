@@ -1,8 +1,9 @@
-/* Serenvelt exploration study 01 · terrain walking on study 05 landscape. Standalone WebGL2. */
+/* Serenvelt Kael harbor study 01 · sculpted waterfront district and collision integration. Standalone WebGL2. */
 (()=>{'use strict';
 const canvas=document.querySelector('#world'),err=document.querySelector('#error'),status=document.querySelector('#stats');
 const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:true,powerPreference:'high-performance'});
 if(!gl){err.textContent='이 기기에서 WebGL2를 사용할 수 없습니다';err.classList.add('show');return;}
+const harbor=window.SerenveltHarbor;
 const TAU=Math.PI*2,clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
 const smooth=(a,b,x)=>{let t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 const h=n=>{let q=Math.sin(n*127.1+49.73)*43758.5453123;return q-Math.floor(q);};
@@ -17,7 +18,10 @@ function ridge(x,z){
  return left+right+distant;
 }
 function ground(x,z){let broad=3.2*(noise(x*.015,z*.014)-.5)+1.25*Math.sin(z*.021+x*.017)+.76*Math.sin(x*.07)*Math.cos(z*.061)+.38*Math.sin(x*.12+z*.037)*Math.cos(z*.078);
-let bank=Math.abs(x-river(z)),valley=(1-smooth(4.8,32,bank))*(3.8+.8*Math.sin(z*.03));return 1.6+broad+ridge(x,z)-valley;}
+let bank=Math.abs(x-river(z)),valley=(1-smooth(4.8,32,bank))*(3.8+.8*Math.sin(z*.03));let base=1.6+broad+ridge(x,z)-valley;
+ // A small, intentional settlement terrace, feathered into the untouched meadow/river.
+ let town=smooth(-29,-11,x)*(1-smooth(38,54,x))*smooth(-49,-29,z)*(1-smooth(60,80,z));
+ return lerp(base,2.95+.009*z+.008*x,town*.995);}
 function normalAt(x,z){let s=1.2,dx=ground(x+s,z)-ground(x-s,z),dz=ground(x,z+s)-ground(x,z-s),l=Math.hypot(dx,2*s,dz);return [-dx/l,2*s/l,-dz/l];}
 const minus=(a,b)=>a.map((x,i)=>x-b[i]);
 function unit(v){let s=Math.hypot(...v)||1;return v.map(x=>x/s);}
@@ -33,7 +37,7 @@ class Batch{
  for(let i=0;i<4;i++){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,[3,3,3,2][i],gl.FLOAT,false,44,[0,12,24,36][i]);}
  gl.bindVertexArray(null);this.count=array.length/11;this.vao=vao;this.data=null;return this;}
 }
-const terrain=new Batch(),opaque=new Batch(),water=new Batch(),canopy=new Batch(),leaves=new Batch();
+const terrain=new Batch(),opaque=new Batch(),water=new Batch(),canopy=new Batch(),leaves=new Batch(),harborMesh=new Batch();
 function makeTerrain(){
  const spacing=3.6,xb=-220,zb=-100,nx=123,nz=128;
  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
@@ -130,14 +134,14 @@ function scatter(){
  bigTree(25,68,2.35,21,false);bigTree(-8,111,.96,27,true);bigTree(73,105,.86,36,false);
  for(let i=0;i<61;i++){
  let x=-168+h(i*19+2)*340,z=32+h(i*31+8)*250;
- if(Math.abs(x-river(z))<14||Math.hypot(x-25,z-68)<40)continue;
+ if(Math.abs(x-river(z))<14||Math.hypot(x-25,z-68)<40||harbor.isPaved(x,z))continue;
  let scale=.3+.45*h(i*13+10);if(i%4===0)conifer(x,z,scale,i+119);else bigTree(x,z,scale,i+78,i%17===0);
  }
  for(let i=0;i<44;i++){
  let x=-185+h(i*29+3)*248,z=164+h(i*31+9)*33;
  let scale=.27+.19*h(i*37);if(i%3===0)conifer(x,z,scale,340+i);else bigTree(x,z,scale,500+i,false);
  }
- for(let i=0;i<70;i++){let x=-130+h(i*37)*300,z=-40+h(i*51+14)*300;if(Math.abs(x-river(z))>10)rock(x,z,.3+1.5*h(i*17+20),i+13);}
+ for(let i=0;i<70;i++){let x=-130+h(i*37)*300,z=-40+h(i*51+14)*300;if(Math.abs(x-river(z))>10&&!harbor.isPaved(x,z))rock(x,z,.3+1.5*h(i*17+20),i+13);}
  // Pebble clusters on the bank and shrub masses in the middle distance, without tile repetition.
  for(let i=0;i<142;i++){
   let z=-35+h(i*31+18)*202,side=i%2?1:-1,x=river(z)+side*(8.8+h(i*23+6)*10);
@@ -145,14 +149,14 @@ function scatter(){
  }
  for(let i=0;i<340;i++){
   let x=-125+h(i*17+1)*244,z=6+h(i*53+9)*156,patch=noise(x*.034+3,z*.051+8);
-  if(Math.abs(x-river(z))<11||patch<.48||Math.hypot(x-25,z-68)<15)continue;
+  if(Math.abs(x-river(z))<11||patch<.48||Math.hypot(x-25,z-68)<15||harbor.isPaved(x,z))continue;
   let size=.3+.75*h(i*47+4),y=ground(x,z)+size*.4;
   card(leaves,[x,y,z],1.3*size,size*.95,900+i,[.47+.20*h(i*7),.62+.20*h(i*9),.47+.15*h(i*13)],i%4);
  }
  // Foreground shrub silhouettes frame the vista without static UI or fake depth layers.
  for(let i=0;i<45;i++){
   let left=i%2===0,x=left?-24+h(i*19)*15:11+h(i*19)*17,z=-24+h(i*23+3)*31;
-  let group=noise(x*.09,z*.11);if(group<.34)continue;
+  let group=noise(x*.09,z*.11);if(group<.34||harbor.isPaved(x,z))continue;
   let size=.36+.72*h(i*17+4),y=ground(x,z)+size*.37;
   card(leaves,[x,y,z],size*1.9,size*1.5,i+1600,[.59+.15*h(i*13),.70+.16*h(i*17),.54+.11*h(i*11)],i%4);
  }
@@ -187,7 +191,7 @@ function grassInstances(){
   let near=i<68200;
   let x=(hash32(i*37)-.5)*(near?124:300),z=(hash32(i*71)-.5)*(near?124:240)+(near?-13:85);
   let patch=.57*noise(x*.033,z*.038)+.43*noise(x*.091+8,z*.08+13);
-  if(hash32(i*19+3)>.66+(patch-.5)*.34||Math.abs(x-river(z))<10)continue;
+  if(hash32(i*19+3)>.66+(patch-.5)*.34||Math.abs(x-river(z))<10||harbor.isPaved(x,z))continue;
   let path=8+.14*z+5*Math.sin(z*.03);
   if(z<90&&Math.abs(x-path)<1.4)continue;
   let scale=.50+.36*hash32(i*11+10);
@@ -388,6 +392,22 @@ void main(){
  frag=vec4(clamp(c,0.,1.),1.);
 }`;
 // V1 grass study restored as an actual instanced shader, not repeated CPU cards.
+const harborFS=`#version 300 es
+precision highp float;
+in vec3 vWorld,vNorm,vColor;in vec2 vUv;in float vDistance;out vec4 frag;
+uniform vec3 uSun,uCam;uniform float uHaze,uWarm,uTime;uniform sampler2D uAtlas,uNoise;
+void main(){
+ vec3 N=normalize(vNorm),albedo=texture(uAtlas,vUv).rgb;
+ float lit=max(dot(N,normalize(uSun)),0.);
+ float grain=texture(uNoise,vWorld.xz*.008+vWorld.y*.012).r;
+ // Stylized physically readable diffuse + warm sun / cold ambient, without overbloom.
+ vec3 ambient=vec3(.77,.83,.89),direct=vec3(1.16,.98,.72);
+ vec3 c=albedo*vColor*(ambient*.67+direct*lit*.47);
+ c*=.90+.13*grain;
+ float shade=1.-exp(-pow(vDistance*(.0012+uHaze*.0043),1.18));
+ vec3 distanceColor=mix(vec3(.56,.78,.80),vec3(.77,.86,.78),.28+.40*uWarm);
+ c=mix(c,distanceColor,clamp(shade,0.,.74));frag=vec4(clamp(c,0.,1.),1.);
+}`;
 const grassVS=`#version 300 es
 precision highp float;precision highp int;
 layout(location=0) in vec4 aRoot;
@@ -442,15 +462,16 @@ const noiseTex=gl.createTexture();gl.activeTexture(gl.TEXTURE2);gl.bindTexture(g
 gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,256,256,0,gl.RGBA,gl.UNSIGNED_BYTE,noisePixels);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
-let sky,world,grassProgram,leafTex,grassTex,grassField;
-try{sky=link(skyVS,skyFS);world=link(worldVS,worldFS);grassProgram=link(grassVS,grassFS);makeTerrain();scatter();[terrain,opaque,water,canopy,leaves].forEach(x=>x.upload());grassField=grassInstances();leafTex=drawAtlas('leaves');grassTex=loadStudyGrassAtlas();}
+let sky,world,grassProgram,harborProgram,harborTex,leafTex,grassTex,grassField;
+try{sky=link(skyVS,skyFS);world=link(worldVS,worldFS);harborProgram=link(worldVS,harborFS);grassProgram=link(grassVS,grassFS);makeTerrain();scatter();harbor.build(harborMesh,ground);[terrain,opaque,water,canopy,leaves,harborMesh].forEach(x=>x.upload());harborTex=harbor.createTexture(gl);grassField=grassInstances();leafTex=drawAtlas('leaves');grassTex=loadStudyGrassAtlas();}
 catch(e){console.error(e);err.textContent='시각화 초기화 실패\n'+e.message;err.classList.add('show');return;}
-const views={meadow:{x:0,z:-23,y:ground(0,-23)+1.72,yaw:innerWidth<600?.27:.12,pitch:-.05},grove:{x:19,z:58,y:ground(19,58)+1.72,yaw:.54,pitch:.01},cliff:{x:-90,z:47,y:ground(-90,47)+6,yaw:.12,pitch:.09}};
-let cam={...views.meadow},quality=window.innerWidth<600?1:0;const buttons=[...document.querySelectorAll('[data-vista]')],qualityNames=['화질 · 높음','화질 · 보통','화질 · 절전'];
-const motion=window.SerenveltMotion.createControls({canvas,ground,cam});
+const views={harbor:{x:-5.5,z:-22,y:ground(-5.5,-22)+1.7,yaw:.12,pitch:-.035},meadow:{x:0,z:-23,y:ground(0,-23)+1.72,yaw:innerWidth<600?.27:.12,pitch:-.05},grove:{x:19,z:58,y:ground(19,58)+1.72,yaw:.54,pitch:.01},cliff:{x:-90,z:47,y:ground(-90,47)+6,yaw:.12,pitch:.09}};
+let cam={...views.harbor},quality=window.innerWidth<600?1:0;const buttons=[...document.querySelectorAll('[data-vista]')],qualityNames=['화질 · 높음','화질 · 보통','화질 · 절전'];
+const motion=window.SerenveltMotion.createControls({canvas,ground,cam,region:harbor.getCollision(ground)});
+window.__SERENVELT_DEBUG__={teleport:location=>motion.teleport(location),getState:()=>motion.getState()};
 const qb=document.querySelector('[data-vista=quality]');qb.textContent=qualityNames[quality];
 buttons.forEach(btn=>btn.addEventListener('click',()=>{let kind=btn.dataset.vista;if(kind==='quality'){quality=(quality+1)%3;qb.textContent=qualityNames[quality];return;}motion.teleport(views[kind]);buttons.forEach(x=>{if(x!==qb)x.classList.toggle('active',x===btn);});}));
-// Camera pointer ownership is centralized in movement.js to avoid duplicate rotation.
+// Pointer and touch ownership is in movement.js to avoid double camera rotation.
 let w=0,hh=0,frame=0,ms=0,prev=performance.now();const locations=new WeakMap();
 function loc(p,k){let cache=locations.get(p);if(!cache){cache={};locations.set(p,cache);}if(!(k in cache))cache[k]=gl.getUniformLocation(p,k);return cache[k];}
 function set1(p,k,v){let u=loc(p,k);if(u!==null)gl.uniform1f(u,v);}
@@ -476,16 +497,20 @@ let empty=gl.createVertexArray(),previousMovement=performance.now();function ren
  [[terrain,0,null],[water,1,null],[opaque,0,null],[canopy,4,null],[leaves,2,leafTex]].forEach(([mesh,kind,tex])=>{
  set1(world,'uKind',kind);if(tex){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);let u=loc(world,'uAtlas');if(u!==null)gl.uniform1i(u,0);}gl.bindVertexArray(mesh.vao);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
  });
+ // Architecture has its own texture atlas and light response, preserving the v1 landscape shaders.
+ uniform(harborProgram,now*.001);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,harborTex);
+ let hs=loc(harborProgram,'uAtlas');if(hs!==null)gl.uniform1i(hs,0);
+ gl.bindVertexArray(harborMesh.vao);gl.drawArrays(gl.TRIANGLES,0,harborMesh.count);
  // Study 01 grass gets its own V1 instanced draw, sharing the same eye and atmosphere.
  uniform(grassProgram,now*.001);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,grassTex);
  let grassSampler=loc(grassProgram,'uGrassTex');if(grassSampler!==null)gl.uniform1i(grassSampler,0);
  gl.bindVertexArray(grassField.vao);
  let drawnGrass=Math.floor(grassField.count*[1,.70,.42][quality]);
  gl.drawArraysInstanced(gl.TRIANGLES,0,12,drawnGrass);
- frame++;ms+=Math.min(100,now-prev);prev=now;
- if(ms>1000){let fps=Math.round(frame*1000/ms),tris=[terrain,opaque,water,canopy,leaves].reduce((sum,x)=>sum+x.tris,0)+drawnGrass*4;
+ frame++;ms+=Math.max(0,now-prev);prev=now;
+ if(ms>1000){let fps=Math.round(frame*1000/ms),tris=[terrain,opaque,water,canopy,leaves,harborMesh].reduce((sum,x)=>sum+x.tris,0)+drawnGrass*4;
   status.textContent=fps+' FPS · '+Math.round(tris/1000)+'K TRI · '+w+'×'+hh;
-  window.__SERENVELT_DIAGNOSTICS__={fps,triangles:tris,drawCalls:7,width:w,height:hh,quality,glError:gl.getError()};frame=0;ms=0;
+  window.__SERENVELT_DIAGNOSTICS__={fps,triangles:tris,drawCalls:8,width:w,height:hh,quality,glError:gl.getError()};frame=0;ms=0;
  }
  requestAnimationFrame(render);
 }
