@@ -1,4 +1,4 @@
-/* Serenvelt environment art study 05 · restored warm/cool landscape palette. Standalone WebGL2. */
+/* Serenvelt exploration study 01 · terrain walking on study 05 landscape. Standalone WebGL2. */
 (()=>{'use strict';
 const canvas=document.querySelector('#world'),err=document.querySelector('#error'),status=document.querySelector('#stats');
 const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:true,powerPreference:'high-performance'});
@@ -445,25 +445,28 @@ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.
 let sky,world,grassProgram,leafTex,grassTex,grassField;
 try{sky=link(skyVS,skyFS);world=link(worldVS,worldFS);grassProgram=link(grassVS,grassFS);makeTerrain();scatter();[terrain,opaque,water,canopy,leaves].forEach(x=>x.upload());grassField=grassInstances();leafTex=drawAtlas('leaves');grassTex=loadStudyGrassAtlas();}
 catch(e){console.error(e);err.textContent='시각화 초기화 실패\n'+e.message;err.classList.add('show');return;}
-const views={meadow:{x:0,z:-23,y:ground(0,-23)+1.72,yaw:innerWidth<600?.27:.12,pitch:-.05},grove:{x:19,z:30,y:ground(19,30)+1.72,yaw:.18,pitch:.01},cliff:{x:-90,z:47,y:ground(-90,47)+6,yaw:.12,pitch:.09}};
+const views={meadow:{x:0,z:-23,y:ground(0,-23)+1.72,yaw:innerWidth<600?.27:.12,pitch:-.05},grove:{x:19,z:58,y:ground(19,58)+1.72,yaw:.54,pitch:.01},cliff:{x:-90,z:47,y:ground(-90,47)+6,yaw:.12,pitch:.09}};
 let cam={...views.meadow},quality=window.innerWidth<600?1:0;const buttons=[...document.querySelectorAll('[data-vista]')],qualityNames=['화질 · 높음','화질 · 보통','화질 · 절전'];
+const motion=window.SerenveltMotion.createControls({canvas,ground,cam});
 const qb=document.querySelector('[data-vista=quality]');qb.textContent=qualityNames[quality];
-buttons.forEach(btn=>btn.addEventListener('click',()=>{let kind=btn.dataset.vista;if(kind==='quality'){quality=(quality+1)%3;qb.textContent=qualityNames[quality];return;}cam={...views[kind]};buttons.forEach(x=>{if(x!==qb)x.classList.toggle('active',x===btn);});}));
-let drag=null;canvas.addEventListener('pointerdown',e=>{drag={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;cam.yaw-=(e.clientX-drag.x)*.0026;cam.pitch=clamp(cam.pitch+(e.clientY-drag.y)*.0021,-.48,.6);drag.x=e.clientX;drag.y=e.clientY;});
-['pointerup','pointercancel','lostpointercapture'].forEach(t=>canvas.addEventListener(t,()=>drag=null));
+buttons.forEach(btn=>btn.addEventListener('click',()=>{let kind=btn.dataset.vista;if(kind==='quality'){quality=(quality+1)%3;qb.textContent=qualityNames[quality];return;}motion.teleport(views[kind]);buttons.forEach(x=>{if(x!==qb)x.classList.toggle('active',x===btn);});}));
+// Camera pointer ownership is centralized in movement.js to avoid duplicate rotation.
 let w=0,hh=0,frame=0,ms=0,prev=performance.now();const locations=new WeakMap();
 function loc(p,k){let cache=locations.get(p);if(!cache){cache={};locations.set(p,cache);}if(!(k in cache))cache[k]=gl.getUniformLocation(p,k);return cache[k];}
 function set1(p,k,v){let u=loc(p,k);if(u!==null)gl.uniform1f(u,v);}
 function set3(p,k,v){let u=loc(p,k);if(u!==null)gl.uniform3fv(u,v);}
 function uniform(p,t){gl.useProgram(p);let cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch),sy=Math.sin(cam.yaw),cy=Math.cos(cam.yaw);
- set3(p,'uCam',[cam.x,cam.y,cam.z]);set3(p,'uForward',[sy*cp,sp,cy*cp]);set3(p,'uRight',[cy,0,-sy]);set3(p,'uUp',[-sy*sp,cp,-cy*sp]);set3(p,'uSun',[.57,.54,.62]);
+ const right=[cy,0,-sy],up=[-sy*sp,cp,-cy*sp],roll=cam.roll||0,cr=Math.cos(roll),sr=Math.sin(roll);
+ set3(p,'uCam',[cam.x,cam.y,cam.z]);set3(p,'uForward',[sy*cp,sp,cy*cp]);
+ set3(p,'uRight',[right[0]*cr+up[0]*sr,right[1]*cr+up[1]*sr,right[2]*cr+up[2]*sr]);
+ set3(p,'uUp',[up[0]*cr-right[0]*sr,up[1]*cr-right[1]*sr,up[2]*cr-right[2]*sr]);set3(p,'uSun',[.57,.54,.62]);
  set1(p,'uFov',Math.tan(65*Math.PI/360));set1(p,'uAspect',w/hh);set1(p,'uTime',t);
  set1(p,'uWarm',.72);set1(p,'uHaze',.57);set1(p,'uCloud',.53);
  let sampler=loc(p,'uNoise');if(sampler!==null)gl.uniform1i(sampler,2);
  let u=loc(p,'uSize');if(u!==null)gl.uniform2f(u,w,hh);
 }
-let empty=gl.createVertexArray();function render(now){
+let empty=gl.createVertexArray(),previousMovement=performance.now();function render(now){
+ motion.update(Math.min(.05,Math.max(0,(now-previousMovement)/1000)));previousMovement=now;
  let q=Math.min(devicePixelRatio||1,1.6)*[1,.7,.5][quality],width=Math.max(2,Math.round(canvas.clientWidth*q)),height=Math.max(2,Math.round(canvas.clientHeight*q));
  if(w!==width||hh!==height){w=canvas.width=width;hh=canvas.height=height;gl.viewport(0,0,w,hh);}
  gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,noiseTex);
