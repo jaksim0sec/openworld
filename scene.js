@@ -130,12 +130,12 @@ function scatter(){
  }
  for(let i=0;i<70;i++){let x=-130+h(i*37)*300,z=-40+h(i*51+14)*300;if(Math.abs(x-river(z))>10)rock(x,z,.3+1.5*h(i*17+20),i+13);}
  // Layered tall grass cards. No opaque triangular-cone blades.
- for(let i=0;i<26000;i++){
- let near=i<19000;
+ for(let i=0;i<24000;i++){
+ let near=i<18000;
  let x=near?-43+h(i*17)*113:-125+h(i*17)*260;
  let z=near?-43+h(i*37+4)*125:-63+h(i*37+4)*220;
  if(Math.abs(x-river(z))<10)continue;
- let w=.67+.38*h(i*7+9),height=.34+.42*h(i*19+3),scale=(.58+.42*h(i*43));
+ let w=.31+.18*h(i*7+9),height=.16+.20*h(i*19+3),scale=(.68+.32*h(i*43));
  let v=.75+.25*h(i*13),seed=i+7;
  card(grass,[x,ground(x,z)+height*.47*scale,z],w*scale,height*scale,seed,[v,v,v],i%4);
  }
@@ -235,7 +235,8 @@ void main(){
    c=mix(c,cliff,stone);
    float grassShade=.22*exp(-length(vWorld.xz-vec2(25.,68.))/18.);c*=1.-grassShade;
    float patchTone=noise(vWorld.xz*.073+vec2(10.3,3.8));
-   c*=.87+.22*smoothstep(.26,.72,patchTone);
+   float smallPatches=noise(vWorld.xz*.29+vec2(7.2,11.4));
+   c*=.82+.29*smoothstep(.24,.77,patchTone)+.09*(smallPatches-.5);
    float topDetail=(noise(vWorld.xz*1.3)-.5)*.055;
    c+=vec3(.064,.070,.028)*topDetail;
  }else if(uKind>.5&&uKind<1.5){
