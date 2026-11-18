@@ -1,4 +1,4 @@
-/* Serenvelt environment art study 03. Standalone WebGL2, no runtime dependencies. */
+/* Serenvelt environment art study 04. Standalone WebGL2, no runtime dependencies. */
 (()=>{'use strict';
 const canvas=document.querySelector('#world'),err=document.querySelector('#error'),status=document.querySelector('#stats');
 const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:true,powerPreference:'high-performance'});
@@ -33,7 +33,7 @@ class Batch{
  for(let i=0;i<4;i++){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,[3,3,3,2][i],gl.FLOAT,false,44,[0,12,24,36][i]);}
  gl.bindVertexArray(null);this.count=array.length/11;this.vao=vao;this.data=null;return this;}
 }
-const terrain=new Batch(),opaque=new Batch(),water=new Batch(),canopy=new Batch(),leaves=new Batch(),grass=new Batch();
+const terrain=new Batch(),opaque=new Batch(),water=new Batch(),canopy=new Batch(),leaves=new Batch();
 function makeTerrain(){
  const spacing=3.6,xb=-220,zb=-100,nx=123,nz=128;
  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
@@ -156,19 +156,47 @@ function scatter(){
   let size=.36+.72*h(i*17+4),y=ground(x,z)+size*.37;
   card(leaves,[x,y,z],size*1.9,size*1.5,i+1600,[.59+.15*h(i*13),.70+.16*h(i*17),.54+.11*h(i*11)],i%4);
  }
- // Layered tall grass cards. No opaque triangular-cone blades.
- for(let i=0;i<18500;i++){
- let near=i<13500;
- let x=near?-49+h(i*17)*122:-160+h(i*17)*320;
- let z=near?-43+h(i*37+4)*130:-61+h(i*37+4)*268;
- let patch=.57*noise(x*.033,z*.038)+.43*noise(x*.091+8,z*.08+13);
- if(h(i*19+3)>smooth(.26,.70,patch)||Math.abs(x-river(z))<13)continue;
- let path=8+.14*z+5*Math.sin(z*.03);
- if(z<90&&Math.abs(x-path)<3.9)continue;
- let w=.38+.28*h(i*7+9),height=.22+.25*h(i*19+3),scale=(.75+.34*h(i*43));
- let v=.82+.12*h(i*13),seed=i+7;
- card(grass,[x,ground(x,z)+height*.47*scale,z],w*scale,height*scale,seed,[v,v,v],i%4);
+ // The reference v1 GPU-instanced grass is generated independently of CPU polygon batches.
+}
+function hash32(x){x=x>>>0;x^=x>>>16;x=Math.imul(x,0x7feb352d);x^=x>>>15;x=Math.imul(x,0x846ca68b);x^=x>>>16;return (x>>>0)/4294967295;}
+// The original 512x512 hand-painted four-variant grass atlas from sky_grass_study_v1.html.
+function loadStudyGrassAtlas(){
+ const tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([0,0,0,0]));
+ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+ const image=new Image();
+ image.onload=()=>{
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
+  gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  window.__SERENVELT_GRASS_READY__=true;
+ };
+ image.onerror=()=>{err.textContent='잔디 텍스처를 읽지 못했습니다';err.classList.add('show');};
+ image.src='assets/grass_v1.png';
+ return tex;
+}
+function grassInstances(){
+ // Study v1: each instance is two crossed textured quads. Positions and heights are authored in CPU ground space.
+ let roots=[];
+ for(let i=1;i<81500;i++){
+  let near=i<68200;
+  let x=(hash32(i*37)-.5)*(near?124:300),z=(hash32(i*71)-.5)*(near?124:240)+(near?-13:85);
+  let patch=.57*noise(x*.033,z*.038)+.43*noise(x*.091+8,z*.08+13);
+  if(hash32(i*19+3)>.66+(patch-.5)*.34||Math.abs(x-river(z))<10)continue;
+  let path=8+.14*z+5*Math.sin(z*.03);
+  if(z<90&&Math.abs(x-path)<1.4)continue;
+  let scale=.50+.36*hash32(i*11+10);
+  roots.push(x,ground(x,z)+.018,z,scale);
  }
+ const vao=gl.createVertexArray(),buf=gl.createBuffer();gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+ gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(roots),gl.STATIC_DRAW);
+ gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,4,gl.FLOAT,false,16,0);gl.vertexAttribDivisor(0,1);
+ gl.bindVertexArray(null);return {vao,count:roots.length/4};
 }
 function drawAtlas(kind){
  let c=document.createElement('canvas');c.width=512;c.height=512;let ctx=c.getContext('2d');
@@ -200,11 +228,18 @@ function drawAtlas(kind){
     ctx.beginPath();ctx.moveTo(-leaf*.75,0);ctx.quadraticCurveTo(0,-leaf*.5,leaf,0);ctx.quadraticCurveTo(0,leaf*.5,-leaf*.75,0);ctx.fill();ctx.restore();
    }
   }else{
-   for(let j=0;j<65;j++){
-    let x=x0+13+rng(tile*83+j*13)*231,base=y0+249-rng(tile*41+j*7)*10,hgt=35+145*Math.pow(rng(j*73+tile*7),1.5),bend=(rng(j*11+tile*25)-.5)*51;
-    let shade=rng(j*37+tile*19);
-    ctx.strokeStyle=shade<.3?'#5b8150':shade<.67?'#7aa566':'#a6c584';ctx.lineWidth=1.1+rng(j*17)*3;
-    ctx.beginPath();ctx.moveTo(x,base);ctx.quadraticCurveTo(x+bend*.15,base-hgt*.67,x+bend,base-hgt);ctx.stroke();
+   // Painted blade clumps: silhouette and alpha structure based on study v1's four atlas tiles.
+   const shades=['#517f4b','#6a9956','#87b365','#abc67b','#b4bc65'];
+   for(let j=0;j<96;j++){
+    let x=x0+19+rng(tile*83+j*13)*220,base=y0+251-rng(tile*41+j*7)*13;
+    let height=44+170*Math.pow(rng(j*73+tile*7),1.34);
+    let bend=(rng(j*11+tile*25)-.5)*78,width=2.3+rng(j*17)*5.4;
+    let tipX=x+bend,tipY=base-height;
+    ctx.fillStyle=shades[Math.floor(rng(j*37+tile*19)*shades.length)];
+    ctx.beginPath();ctx.moveTo(x-width,base);
+    ctx.quadraticCurveTo(x+bend*.10-width*.3,base-height*.62,tipX,tipY);
+    ctx.quadraticCurveTo(x+bend*.26+width*.4,base-height*.48,x+width,base);
+    ctx.closePath();ctx.fill();
    }
   }
  }
@@ -215,28 +250,47 @@ const skyVS=`#version 300 es
 precision highp float;void main(){vec2 p=gl_VertexID==0?vec2(-1.,-1.):gl_VertexID==1?vec2(3.,-1.):vec2(-1.,3.);gl_Position=vec4(p,0.,1.);}`;
 const skyFS=`#version 300 es
 precision highp float;
-out vec4 frag;uniform vec3 uForward,uRight,uUp,uSun;uniform vec2 uSize;uniform float uFov,uTime;
-float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+1.),f.x),f.y);}
-float fbm(vec2 p){float c=0.,w=.52;for(int i=0;i<4;i++){c+=w*n(p);p=p*2.03+vec2(13.7,9.2);w*=.5;}return c;}
+out vec4 frag;uniform vec3 uForward,uRight,uUp,uSun;uniform vec2 uSize;uniform float uFov,uTime,uWarm,uCloud;uniform sampler2D uNoise;
+float noiseAt(vec2 p){return texture(uNoise,p).r;}
+vec3 skyAtmosphere(vec3 d){
+ float y=max(d.y,0.);float cosTheta=clamp(dot(d,uSun),-1.,1.);
+ float rayPhase=.75*(1.+cosTheta*cosTheta);
+ float g=.76,miePhase=(1.-g*g)/pow(max(.05,1.+g*g-2.*g*cosTheta),1.5);
+ float optical=1./(.14+y*1.9);
+ vec3 rayBeta=vec3(.24,.43,.9);
+ vec3 scatter=(1.-exp(-rayBeta*optical*.88))*rayPhase;
+ vec3 base=mix(vec3(.57,.81,.87),vec3(.065,.51,.77),pow(y,.51));
+ base+=scatter*vec3(.034,.067,.115);
+ base+=vec3(1.,.71,.35)*exp(-y*11.)*(.08+.15*uWarm)*.35;
+ base+=miePhase*vec3(1.,.77,.48)*(.004+.008*uWarm)*exp(-y*.5);
+ return base;
+}
+float cloudShape(vec2 p){
+ float a=noiseAt(p*.0021+vec2(.31,.17));
+ float b=noiseAt(p*.0057+vec2(.43,.27));
+ float c=noiseAt(p*.016+vec2(.11,.72));
+ float d=noiseAt(p*.043);
+ return a*.57+b*.25+c*.13+d*.05;
+}
 void main(){
- vec2 uv=gl_FragCoord.xy/uSize*2.-1.;vec3 d=normalize(uForward+uRight*uv.x*uFov*uSize.x/uSize.y+uUp*uv.y*uFov);
- float elev=max(0.,d.y),sun=max(dot(d,uSun),0.);
- vec3 sky=mix(vec3(.65,.86,.83),vec3(.095,.50,.73),pow(elev,.51));sky+=vec3(1.,.78,.42)*.055*exp(-elev*14.);
- // Cloud banks: warped broad masses, fine cumulus edge breakup and solar facing shade.
- vec2 p=d.xz/(max(.035,elev)+.23)*1.13+vec2(uTime*.0036,0.);
- vec2 warp=vec2(n(p*.6+vec2(3.,0.)),n(p*.6+vec2(0.,4.)))-.5;
- float density=fbm(p*.82+warp*.62)+n(p*2.1)*.045;
- float alpha=smoothstep(.505,.585,density)*smoothstep(.013,.12,elev);
- float towardSun=fbm(p*.82+warp*.62-uSun.xz*.35);
- float bright=clamp(.48+(density-towardSun)*2.8+elev*.26,0.,1.);
- float depth=smoothstep(.55,.68,density);
- vec3 clouds=mix(vec3(.57,.69,.73),vec3(1.,.99,.94),bright);
- clouds*=1.-depth*.13*(1.-bright);
- float edge=(smoothstep(.49,.56,density)-smoothstep(.60,.69,density))*.22;
- clouds+=vec3(.92,.86,.65)*edge*(.3+.7*sun);
- sky=mix(sky,clouds,alpha*.96);
- sky+=vec3(1.,.82,.48)*pow(sun,20.)*.1+vec3(1.,.92,.63)*pow(sun,500.)*.65;
+ vec2 uv=gl_FragCoord.xy/uSize*2.-1.;
+ vec3 d=normalize(uForward+uRight*uv.x*uFov*uSize.x/uSize.y+uUp*uv.y*uFov);
+ vec3 sky=skyAtmosphere(d);
+ float elev=smoothstep(.015,.15,d.y);
+ vec2 plane=d.xz/(.22+max(.0,d.y));
+ vec2 p=plane*3.8+vec2(3.9,6.5)+vec2(uTime*.02,uTime*.005);
+ float structure=cloudShape(p);
+ float band=.019*sin(p.x*.36+p.y*.21)+.012*sin(p.y*.68);
+ float threshold=mix(.62,.48,uCloud);
+ float alpha=smoothstep(threshold-.033,threshold+.049,structure+band)*elev;
+ float toSun=cloudShape(p+normalize(uSun.xz)*.70);
+ float light=clamp(.56+(structure-toSun)*2.8+.29*uSun.y,0.,1.);
+ vec3 cloudShade=mix(vec3(.60,.72,.77),vec3(1.,.968,.86),light);
+ cloudShade+=vec3(.10,.065,.02)*uWarm*pow(max(dot(d,uSun),0.),5.);
+ sky=mix(sky,cloudShade,clamp(alpha*.9,0.,1.));
+ float sun=dot(d,uSun);
+ sky+=vec3(1.,.83,.56)*pow(smoothstep(.994,1.,sun),1.5)*(.34+.15*uWarm);
+ sky+=vec3(1.,.82,.54)*pow(max(sun,0.),14.)*(.018+.04*uWarm);
  frag=vec4(clamp(sky,0.,1.),1.);
 }`;
 const worldVS=`#version 300 es
@@ -253,7 +307,7 @@ void main(){
 const worldFS=`#version 300 es
 precision highp float;
 in vec3 vWorld,vNorm,vColor;in vec2 vUv;in float vDistance;out vec4 frag;
-uniform vec3 uSun,uCam;uniform float uKind,uTime;uniform sampler2D uAtlas;
+uniform vec3 uSun,uCam;uniform float uKind,uTime,uWarm,uHaze;uniform sampler2D uAtlas,uNoise;
 float h(vec2 x){return fract(sin(dot(x,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+1.),f.x),f.y);}
 void main(){
@@ -261,14 +315,27 @@ void main(){
  vec3 c=vColor*(.69+.39*sun);
  if(uKind<.5){
    vec2 p=vWorld.xz;
-   float broad=noise(p*.018),medium=noise(p*.075+vec2(7.,13.)),fine=noise(p*.39);
-   float lime=smoothstep(.24,.78,.54*broad+.46*medium);
-   vec3 meadow=mix(vec3(.18,.39,.23),vec3(.58,.73,.36),lime);
-   meadow+=vec3(.11,.12,.024)*(fine-.5);
-   // Sunlit middle distance with darker vegetation at the camera, preserving painterly depth.
-   float opening=smoothstep(-27.,40.,p.y)*(1.-smoothstep(130.,230.,p.y));
-   meadow+=vec3(.10,.14,.028)*opening*(.55+.45*noise(p*.027+vec2(8.,19.)));
-   c=mix(c,meadow*(.83+.28*sun),.88);
+   // Reuse sky_grass_study_v1: layered, filterable noise and warm meadow palette.
+   float broad=texture(uNoise,p*.0012+vec2(.21,.48)).r;
+   float medium=texture(uNoise,p*.0105+vec2(.53,.17)).r;
+   float fine=texture(uNoise,p*.051).r;
+   float stipple=texture(uNoise,p*.195+vec2(.02,.68)).r;
+   float wave=.5+.5*sin(p.x*.037+p.y*.025+broad*3.);
+   float soil=smoothstep(.19,.78,broad*.50+medium*.29+wave*.21);
+   vec3 dark=vec3(.21,.40,.23),mid=vec3(.36,.58,.31),bright=vec3(.61,.74,.37);
+   vec3 meadow=mix(dark,mid,smoothstep(.12,.92,soil));
+   meadow=mix(meadow,bright,.30*medium+.14*wave);
+   meadow+=vec3(.048,.055,.014)*(fine-.5)+vec3(.019,.022,.007)*(stipple-.5);
+   meadow*=.70+.31*sun;
+   meadow+=vec3(.095,.065,.018)*sun*uWarm;
+   // Material diversity follows exposure, silt deposition and foot traffic, not arbitrary green tint.
+   float coarse=noise(p*.037+vec2(8.7,1.2));
+   float exposure=smoothstep(.19,.40,1.-N.y);
+   float loam=smoothstep(.32,.60,.70*(1.-medium)+.30*coarse)*.33;
+   loam=clamp(loam*.3+smoothstep(.53,.70,.58*(1.-medium)+.42*(1.-broad))*.60+exposure*.2,0.,.7);
+   vec3 earth=mix(vec3(.39,.34,.25),vec3(.64,.57,.43),broad*.48+fine*.52);
+   meadow=mix(meadow,earth,loam);
+   c=mix(c,meadow,.95);
    float slope=1.-clamp(N.y,0.,1.);
    float stone=smoothstep(.26,.57,slope)*smoothstep(5.,18.,vWorld.y);
    float stripe=noise(vec2(p.x*.049+p.y*.035,vWorld.y*.14+noise(p*.15)*.45));
@@ -283,12 +350,12 @@ void main(){
    c=mix(c,silt,shore*(1.-stone)*.85);
    // A quiet walking trail guides the landscape toward the old tree.
    float track=8.+p.y*.14+5.*sin(p.y*.03)+(noise(p*.05)-.5)*2.;
-   float trail=(1.-smoothstep(1.3,4.5,abs(p.x-track)))*smoothstep(-52.,-24.,p.y)*(1.-smoothstep(72.,91.,p.y));
-   c=mix(c,vec3(.57,.60,.42)+vec3(.06,.04,.015)*(fine-.5),trail*(1.-stone)*.82);
+   float trail=(1.-smoothstep(.65,1.92,abs(p.x-track)))*smoothstep(-52.,-24.,p.y)*(1.-smoothstep(72.,91.,p.y));
+   c=mix(c,vec3(.58,.50,.37)+vec3(.045,.038,.02)*(fine-.5),trail*(1.-stone)*.92);
    vec2 shadowPos=(p-vec2(32.5,57.));
    float shadow=.32*exp(-2.0*(shadowPos.x*shadowPos.x/(18.*18.)+shadowPos.y*shadowPos.y/(12.*12.)));
    float nearShade=1.-smoothstep(8.,43.,length(p-vec2(0.,-23.)));
-   c*=1.-shadow-.29*nearShade;
+   c*=1.-shadow-.11*nearShade;
  }else if(uKind>.5&&uKind<1.5){
    float q=sin(vWorld.z*.53-vWorld.x*.17+uTime*.8)*sin(vWorld.x*.96+vWorld.z*.08-uTime*.71);
    float q2=noise(vWorld.xz*.48+vec2(uTime*.035,uTime*.02));
@@ -309,19 +376,73 @@ void main(){
    float threshold= uKind<2.5?.39:.28;
    if(t.a<threshold)discard;
    c*=t.rgb*(uKind<2.5?1.22:.99);
-   if(uKind>2.5){float fade=1.-smoothstep(10.,34.,vDistance);float d=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);if(d>fade)discard;}
+   if(uKind>2.5){float fade=1.-smoothstep(32.,58.,vDistance);float d=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);if(d>fade)discard;}
    c+=vec3(.08,.065,.021)*sun;
  }
- float haze=1.-exp(-pow(vDistance*.0036,1.21));
- c=mix(c,vec3(.62,.80,.78),clamp(haze,0.,.84));
+ float haze=1.-exp(-pow(vDistance*(.0017+uHaze*.0088),1.22));
+ vec3 horizon=vec3(.54,.75,.77)+vec3(.08,.045,.005)*uWarm;
+ c=mix(c,horizon,clamp(haze,0.,.86));
  frag=vec4(clamp(c,0.,1.),1.);
+}`;
+// V1 grass study restored as an actual instanced shader, not repeated CPU cards.
+const grassVS=`#version 300 es
+precision highp float;precision highp int;
+layout(location=0) in vec4 aRoot;
+uniform vec3 uCam,uForward,uRight,uUp;uniform float uFov,uAspect,uTime;
+out vec2 vUv;out vec3 vTint;out float vY,vDistance;
+uint hash(uint x){x^=x>>16u;x*=0x7feb352du;x^=x>>15u;x*=0x846ca68bu;x^=x>>16u;return x;}
+float rnd(uint x){return float(hash(x))*(1./4294967295.);}
+void main(){
+ uint id=uint(gl_InstanceID)+1u;
+ uint card=uint(gl_VertexID/6);
+ int t=gl_VertexID%6;
+ vec2 uv=t==0?vec2(0.,0.):t==1?vec2(1.,0.):t==2?vec2(0.,1.):t==3?vec2(0.,1.):t==4?vec2(1.,0.):vec2(1.,1.);
+ uint seed=id*167u+card*2654435761u;
+ float a=rnd(id*43u)*6.2831853+float(card)*1.5707963;
+ vec2 axis=vec2(cos(a),sin(a));
+ float width=mix(.39,.62,rnd(id*11u))*aRoot.w;
+ float height=mix(.32,.58,rnd(id*17u))*aRoot.w;
+ float gust=sin(uTime*.77+aRoot.x*.12+aRoot.z*.08)*.64+sin(uTime*1.8+aRoot.x*.31-aRoot.z*.18)*.36;
+ vec2 wind=vec2(.075,.053)*gust*uv.y*uv.y;
+ vec3 world=aRoot.xyz+vec3(axis.x*(uv.x-.5)*width+wind.x,height*uv.y,axis.y*(uv.x-.5)*width+wind.y);
+ vec3 rel=world-uCam;float depth=dot(rel,uForward);
+ gl_Position=vec4(dot(rel,uRight)/(uFov*uAspect),dot(rel,uUp)/uFov,depth*1.00024-.18,depth);
+ uint variant=uint(floor(rnd(id*59u)*4.));
+ vec2 tile=vec2(float(variant%2u),float(variant/2u));
+ vUv=(uv+tile)*.5;
+ float spatial=.5+.5*sin(aRoot.x*.027+aRoot.z*.045);
+ vTint=mix(vec3(.79,.92,.87),vec3(1.24,1.14,.79),rnd(seed*47u)*.35+spatial*.65);
+ vY=uv.y;vDistance=distance(aRoot.xz,uCam.xz);
+}`;
+const grassFS=`#version 300 es
+precision highp float;
+in vec2 vUv;in vec3 vTint;in float vY,vDistance;out vec4 frag;
+uniform float uWarm,uHaze;uniform sampler2D uGrassTex;
+void main(){
+ vec4 blade=texture(uGrassTex,vUv);if(blade.a<.39)discard;
+ vec3 col=blade.rgb*vTint*(.76+.25*vY);
+ col+=vec3(.085,.065,.007)*vY*uWarm;
+ float fog=1.-exp(-pow(vDistance*(.0017+uHaze*.0088),1.22));
+ col=mix(col,vec3(.54,.75,.77)+vec3(.08,.045,.005)*uWarm,clamp(fog,0.,.79));
+ float fade=1.-smoothstep(40.,62.,vDistance);
+ float jitter=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
+ if(jitter>fade)discard;
+ frag=vec4(clamp(col,0.,1.),1.);
 }`;
 function shader(type,code){let sh=gl.createShader(type);gl.shaderSource(sh,code);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(sh));return sh;}
 function link(v,f){let p=gl.createProgram();gl.attachShader(p,shader(gl.VERTEX_SHADER,v));gl.attachShader(p,shader(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p;}
-let sky,world,leafTex,grassTex;
-try{sky=link(skyVS,skyFS);world=link(worldVS,worldFS);makeTerrain();scatter();[terrain,opaque,water,canopy,leaves,grass].forEach(x=>x.upload());leafTex=drawAtlas('leaves');grassTex=drawAtlas('grass');}
+// Filterable deterministic noise from the original Sky & Meadow art study.
+const noisePixels=new Uint8Array(256*256*4);let noiseSeed=26357;
+function noiseRandom(){noiseSeed^=noiseSeed<<13;noiseSeed^=noiseSeed>>>17;noiseSeed^=noiseSeed<<5;return(noiseSeed>>>0)/4294967295;}
+for(let i=0;i<256*256;i++){let n=Math.floor(noiseRandom()*256);noisePixels[i*4]=noisePixels[i*4+1]=noisePixels[i*4+2]=n;noisePixels[i*4+3]=255;}
+const noiseTex=gl.createTexture();gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,noiseTex);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,256,256,0,gl.RGBA,gl.UNSIGNED_BYTE,noisePixels);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
+let sky,world,grassProgram,leafTex,grassTex,grassField;
+try{sky=link(skyVS,skyFS);world=link(worldVS,worldFS);grassProgram=link(grassVS,grassFS);makeTerrain();scatter();[terrain,opaque,water,canopy,leaves].forEach(x=>x.upload());grassField=grassInstances();leafTex=drawAtlas('leaves');grassTex=loadStudyGrassAtlas();}
 catch(e){console.error(e);err.textContent='시각화 초기화 실패\n'+e.message;err.classList.add('show');return;}
-const views={meadow:{x:0,z:-23,y:ground(0,-23)+4.2,yaw:innerWidth<600?.27:.12,pitch:-.05},grove:{x:19,z:30,y:ground(19,30)+4.4,yaw:.18,pitch:.01},cliff:{x:-90,z:47,y:ground(-90,47)+6,yaw:.12,pitch:.09}};
+const views={meadow:{x:0,z:-23,y:ground(0,-23)+1.72,yaw:innerWidth<600?.27:.12,pitch:-.05},grove:{x:19,z:30,y:ground(19,30)+1.72,yaw:.18,pitch:.01},cliff:{x:-90,z:47,y:ground(-90,47)+6,yaw:.12,pitch:.09}};
 let cam={...views.meadow},quality=window.innerWidth<600?1:0;const buttons=[...document.querySelectorAll('[data-vista]')],qualityNames=['화질 · 높음','화질 · 보통','화질 · 절전'];
 const qb=document.querySelector('[data-vista=quality]');qb.textContent=qualityNames[quality];
 buttons.forEach(btn=>btn.addEventListener('click',()=>{let kind=btn.dataset.vista;if(kind==='quality'){quality=(quality+1)%3;qb.textContent=qualityNames[quality];return;}cam={...views[kind]};buttons.forEach(x=>{if(x!==qb)x.classList.toggle('active',x===btn);});}));
@@ -333,21 +454,30 @@ function loc(p,k){let cache=locations.get(p);if(!cache){cache={};locations.set(p
 function set1(p,k,v){let u=loc(p,k);if(u!==null)gl.uniform1f(u,v);}
 function set3(p,k,v){let u=loc(p,k);if(u!==null)gl.uniform3fv(u,v);}
 function uniform(p,t){gl.useProgram(p);let cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch),sy=Math.sin(cam.yaw),cy=Math.cos(cam.yaw);
- set3(p,'uCam',[cam.x,cam.y,cam.z]);set3(p,'uForward',[sy*cp,sp,cy*cp]);set3(p,'uRight',[cy,0,-sy]);set3(p,'uUp',[-sy*sp,cp,-cy*sp]);set3(p,'uSun',[-.36,.77,.52]);
+ set3(p,'uCam',[cam.x,cam.y,cam.z]);set3(p,'uForward',[sy*cp,sp,cy*cp]);set3(p,'uRight',[cy,0,-sy]);set3(p,'uUp',[-sy*sp,cp,-cy*sp]);set3(p,'uSun',[.57,.54,.62]);
  set1(p,'uFov',Math.tan(65*Math.PI/360));set1(p,'uAspect',w/hh);set1(p,'uTime',t);
+ set1(p,'uWarm',.72);set1(p,'uHaze',.57);set1(p,'uCloud',.53);
+ let sampler=loc(p,'uNoise');if(sampler!==null)gl.uniform1i(sampler,2);
  let u=loc(p,'uSize');if(u!==null)gl.uniform2f(u,w,hh);
 }
 let empty=gl.createVertexArray();function render(now){
  let q=Math.min(devicePixelRatio||1,1.6)*[1,.7,.5][quality],width=Math.max(2,Math.round(canvas.clientWidth*q)),height=Math.max(2,Math.round(canvas.clientHeight*q));
  if(w!==width||hh!==height){w=canvas.width=width;hh=canvas.height=height;gl.viewport(0,0,w,hh);}
+ gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,noiseTex);
  gl.disable(gl.BLEND);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);uniform(sky,now*.001);gl.bindVertexArray(empty);gl.drawArrays(gl.TRIANGLES,0,3);
  gl.clear(gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LEQUAL);
  uniform(world,now*.001);
- [[terrain,0,null],[water,1,null],[opaque,0,null],[canopy,4,null],[leaves,2,leafTex],[grass,3,grassTex]].forEach(([mesh,kind,tex])=>{
+ [[terrain,0,null],[water,1,null],[opaque,0,null],[canopy,4,null],[leaves,2,leafTex]].forEach(([mesh,kind,tex])=>{
  set1(world,'uKind',kind);if(tex){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);let u=loc(world,'uAtlas');if(u!==null)gl.uniform1i(u,0);}gl.bindVertexArray(mesh.vao);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
  });
+ // Study 01 grass gets its own V1 instanced draw, sharing the same eye and atmosphere.
+ uniform(grassProgram,now*.001);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,grassTex);
+ let grassSampler=loc(grassProgram,'uGrassTex');if(grassSampler!==null)gl.uniform1i(grassSampler,0);
+ gl.bindVertexArray(grassField.vao);
+ let drawnGrass=Math.floor(grassField.count*[1,.70,.42][quality]);
+ gl.drawArraysInstanced(gl.TRIANGLES,0,12,drawnGrass);
  frame++;ms+=Math.min(100,now-prev);prev=now;
- if(ms>1000){let fps=Math.round(frame*1000/ms),tris=[terrain,opaque,water,canopy,leaves,grass].reduce((sum,x)=>sum+x.tris,0);
+ if(ms>1000){let fps=Math.round(frame*1000/ms),tris=[terrain,opaque,water,canopy,leaves].reduce((sum,x)=>sum+x.tris,0)+drawnGrass*4;
   status.textContent=fps+' FPS · '+Math.round(tris/1000)+'K TRI · '+w+'×'+hh;
   window.__SERENVELT_DIAGNOSTICS__={fps,triangles:tris,drawCalls:7,width:w,height:hh,quality,glError:gl.getError()};frame=0;ms=0;
  }

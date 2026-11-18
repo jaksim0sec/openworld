@@ -19,3 +19,12 @@ for (const segment of ["getContext('webgl2'", 'function ridge(', 'function groun
 assert.equal((scene.match(/#version 300 es/g) || []).length >= 4, true, 'Missing shader declarations');
 console.log('PASS: Node JavaScript syntax, launcher controls, shader declarations, and render loop.');
 console.log('NOTE: This check does NOT verify GPU shader compilation, rendered appearance, mobile GPU frame rate or texture quality.');
+
+const atlas = readFileSync(new URL('../assets/grass_v1.png', import.meta.url));
+assert.equal(atlas.subarray(0,8).toString('hex'),'89504e470d0a1a0a','Original study PNG header');
+assert.equal(atlas.readUInt32BE(16),512,'Original atlas width');
+assert.equal(atlas.readUInt32BE(20),512,'Original atlas height');
+for (const fragment of ['vec3 skyAtmosphere(', 'function grassInstances(', 'gl.drawArraysInstanced(', "image.src='assets/grass_v1.png'"]) {
+ assert.ok(scene.includes(fragment),'Study v1 art direction regression: '+fragment);
+}
+console.log('PASS: Original sky/grass research integrations and atlas retained.');
